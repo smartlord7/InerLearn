@@ -20,7 +20,7 @@ from sklearn.preprocessing import StandardScaler
 
 from environment import Environment, TrajectoryGenerator, plot_environment, load_or_create_environment
 from imu_simulator import generate_imu_dataset, build_supervised_dataset
-from model_provider import ModelProvider, load_model_cache, save_model_cache
+from model_provider import ModelProvider, load_cached_models
 from imu_evaluator import IMUEvaluator
 
 
@@ -33,7 +33,7 @@ if not logger.handlers:
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", "%H:%M:%S")
     handler.setFormatter(fmt)
     logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 
 # -------------------------------------------------------------------
@@ -86,14 +86,15 @@ def train_models(Xtr_s, ytr, Xte_s, yte, window=40, epochs=20):
     Train all classical and deep estimators using the ModelProvider.
     """
     logger.info("Step 4: Training model suite ...")
-    provider = load_model_cache()
-    if provider is None:
+    models = load_cached_models()
+
+    if len(models) == 0:
         provider = ModelProvider(Xtr_s, ytr, Xte_s, yte, window=40)
         provider.train_classical()
         provider.train_deep(epochs=30)
-        save_model_cache(provider)
-        provider.train_classical()
-    provider.train_deep(epochs=epochs)
+    else:
+        provider = ModelProvider(Xtr_s, ytr, Xte_s, yte, window=40)
+        provider.models = models
     results = provider.evaluate_all()
     best_model_name, best_mse = results[0]
     best_model = provider.get_model(best_model_name)
@@ -122,7 +123,7 @@ def run_full_pipeline(
     area_size=5000,
     n_obstacles=500,
     T=120.0,
-    dt=0.05,
+    dt=0.5,
     v_mean=2.2,
     window=40,
     epochs=20,
